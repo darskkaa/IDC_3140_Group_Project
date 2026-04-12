@@ -220,3 +220,96 @@ conn.close()
 
 data = df.copy()
 le = LabelEncoder()
+
+
+
+#continue 
+
+# encode text columns
+cat_cols = ['Fuel_Type', 'Transmission', 'Body_Type', 'Car_Brand', 'Customer_Type', 'Insurance_Type']
+for col in cat_cols:
+    data[col + '_enc'] = le.fit_transform(data[col])
+    print('encoded:', col)
+
+# made this column to help the model
+data['Rental_Cost_LKR'] = data['Daily_Rate_LKR'] * data['Rental_Duration_Days']
+
+feature_cols = [
+    'Rental_Cost_LKR',
+    'Daily_Rate_LKR',
+    'Rental_Duration_Days',
+    'Vehicle_Year',
+    'Engine_CC',
+    'Mileage_KM',
+    'Customer_Age',
+    'Fuel_Type_enc',
+    'Transmission_enc',
+    'Body_Type_enc',
+    'Car_Brand_enc',
+    'Customer_Type_enc',
+    'Insurance_Type_enc',
+]
+
+X = data[feature_cols]
+y = data['Total_Amount_LKR']
+
+print('X shape:', X.shape)
+print('y shape:', y.shape)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+print('training rows:', len(X_train))
+print('testing rows:', len(X_test))
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+print('ok')
+
+# helper class to make predictions easier
+class RentalPredictor:
+    def __init__(self, trained_model, cols):
+        self.model = trained_model
+        self.cols = cols
+
+    def predict(self, daily_rate, days, fuel_enc, trans_enc, body_enc, brand_enc, cust_enc, ins_enc):
+        row = {
+            'Rental_Cost_LKR': daily_rate * days,
+            'Daily_Rate_LKR': daily_rate,
+            'Rental_Duration_Days': days,
+            'Vehicle_Year': 2020,
+            'Engine_CC': 1500,
+            'Mileage_KM': 30000,
+            'Customer_Age': 35,
+            'Fuel_Type_enc': fuel_enc,
+            'Transmission_enc': trans_enc,
+            'Body_Type_enc': body_enc,
+            'Car_Brand_enc': brand_enc,
+            'Customer_Type_enc': cust_enc,
+            'Insurance_Type_enc': ins_enc,
+        }
+        return round(self.model.predict(pd.DataFrame([row])[self.cols])[0], 2)
+
+predictor = RentalPredictor(model, feature_cols)
+print('predictor ready')
+
+predictions = model.predict(X_test)
+
+r2 = r2_score(y_test, predictions)
+rmse = np.sqrt(mean_squared_error(y_test, predictions))
+mae = abs(y_test - predictions).mean()
+
+print('R2 Score:', round(r2, 4))
+print('RMSE: LKR', round(rmse, 2), '/ USD', round(rmse / USD_RATE, 2))
+print('MAE: LKR', round(mae, 2), '/ USD', round(mae / USD_RATE, 2))
+
+#display fig
+plt.figure(figsize=(8, 6))
+plt.scatter(y_test, predictions, alpha=0.3, color='blue', s=10)
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', label='perfect prediction')
+plt.xlabel('Actual Total Amount (LKR)')
+plt.ylabel('Predicted Total Amount (LKR)')
+plt.title('Actual vs Predicted  R2 = ' + str(round(r2, 4)))
+plt.legend()
+plt.tight_layout()
+plt.savefig('predictions.png')
+plt.show()
