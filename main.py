@@ -450,3 +450,4 @@ plt.legend()
 plt.grid(True, alpha=0.3)
 plt.savefig('trip_cost_planner.png')
 plt.show()
+#next we need to add maybe a featire without knowing bc lin reg works but is a easy ml model # try predicting without knowing the daily rate
