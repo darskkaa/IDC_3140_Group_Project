@@ -1,5 +1,5 @@
 # car rental price prediction
-# IDC 3140 - group project
+# IDC 3140 group project
 
 import subprocess
 subprocess.run(['pip', 'install', 'kagglehub', '-q'], check=True)
@@ -312,4 +312,141 @@ plt.title('Actual vs Predicted  R2 = ' + str(round(r2, 4)))
 plt.legend()
 plt.tight_layout()
 plt.savefig('predictions.png')
+plt.show()
+
+# print first 10 rows to check
+print('actual vs predicted (first 10):')
+print()
+for i in range(10):
+    actual = round(y_test.values[i], 2)
+    predicted = round(predictions[i], 2)
+    print('row', i+1, '| actual:', actual, '| predicted:', predicted)
+
+# Toyota SUV, 3 days, LKR 15000 per day
+# fuel=petrol(2), trans=auto(0), body=SUV(2), brand=Toyota(5), customer=tourist(2), insurance=basic(0)
+sample = {
+    'Rental_Cost_LKR': 45000,
+    'Daily_Rate_LKR': 15000,
+    'Rental_Duration_Days': 3,
+    'Vehicle_Year': 2020,
+    'Engine_CC': 1500,
+    'Mileage_KM': 30000,
+    'Customer_Age': 35,
+    'Fuel_Type_enc': 2,
+    'Transmission_enc': 0,
+    'Body_Type_enc': 2,
+    'Car_Brand_enc': 5,
+    'Customer_Type_enc': 2,
+    'Insurance_Type_enc': 0,
+}
+
+input_row = pd.DataFrame([sample])[feature_cols]
+price = model.predict(input_row)[0]
+print('toyota SUV, 3 days:', round(price, 2), 'LKR /', round(price / USD_RATE, 2), 'USD')
+
+# budget car - suzuki hatchback 3 days
+sample2 = {
+    'Rental_Cost_LKR': 24000,
+    'Daily_Rate_LKR': 8000,
+    'Rental_Duration_Days': 3,
+    'Vehicle_Year': 2015,
+    'Engine_CC': 1000,
+    'Mileage_KM': 80000,
+    'Customer_Age': 28,
+    'Fuel_Type_enc': 0,
+    'Transmission_enc': 1,
+    'Body_Type_enc': 0,
+    'Car_Brand_enc': 4,
+    'Customer_Type_enc': 1,
+    'Insurance_Type_enc': 0,
+}
+
+price2 = model.predict(pd.DataFrame([sample2])[feature_cols])[0]
+print('suzuki hatchback, 3 days:', round(price2, 2), 'LKR /', round(price2 / USD_RATE, 2), 'USD')
+
+# does our model beat just guessing the average price every time?
+avg_price = y_train.mean()
+baseline = [avg_price] * len(y_test)
+r2_base = r2_score(y_test, baseline)
+rmse_base = np.sqrt(mean_squared_error(y_test, baseline))
+
+print('baseline - always guess average:')
+print('  R2:', round(r2_base, 4), ' RMSE:', round(rmse_base, 0))
+print('our model:')
+print('  R2:', round(r2, 4), ' RMSE:', round(rmse, 0))
+
+# trip cost for 1 to 14 days - budget tier (8000/day)
+durations = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+
+budget_costs = []
+for d in durations:
+    row = {
+        'Rental_Cost_LKR': 8000 * d,
+        'Daily_Rate_LKR': 8000,
+        'Rental_Duration_Days': d,
+        'Vehicle_Year': 2020,
+        'Engine_CC': 1500,
+        'Mileage_KM': 30000,
+        'Customer_Age': 35,
+        'Fuel_Type_enc': 2,
+        'Transmission_enc': 0,
+        'Body_Type_enc': 3,
+        'Car_Brand_enc': 3,
+        'Customer_Type_enc': 1,
+        'Insurance_Type_enc': 0,
+    }
+    cost = model.predict(pd.DataFrame([row])[feature_cols])[0]
+    budget_costs.append(round(cost, 2))
+
+mid_costs = []
+for d in durations:
+    row = {
+        'Rental_Cost_LKR': 15000 * d,
+        'Daily_Rate_LKR': 15000,
+        'Rental_Duration_Days': d,
+        'Vehicle_Year': 2020,
+        'Engine_CC': 1500,
+        'Mileage_KM': 30000,
+        'Customer_Age': 35,
+        'Fuel_Type_enc': 2,
+        'Transmission_enc': 0,
+        'Body_Type_enc': 3,
+        'Car_Brand_enc': 3,
+        'Customer_Type_enc': 1,
+        'Insurance_Type_enc': 0,
+    }
+    cost = model.predict(pd.DataFrame([row])[feature_cols])[0]
+    mid_costs.append(round(cost, 2))
+
+premium_costs = []
+for d in durations:
+    row = {
+        'Rental_Cost_LKR': 23000 * d,
+        'Daily_Rate_LKR': 23000,
+        'Rental_Duration_Days': d,
+        'Vehicle_Year': 2020,
+        'Engine_CC': 1500,
+        'Mileage_KM': 30000,
+        'Customer_Age': 35,
+        'Fuel_Type_enc': 2,
+        'Transmission_enc': 0,
+        'Body_Type_enc': 3,
+        'Car_Brand_enc': 3,
+        'Customer_Type_enc': 1,
+        'Insurance_Type_enc': 0,
+    }
+    cost = model.predict(pd.DataFrame([row])[feature_cols])[0]
+    premium_costs.append(round(cost, 2))
+
+plt.figure(figsize=(12, 6))
+plt.plot(durations, budget_costs, marker='o', color='steelblue', label='Budget (8000/day)')
+plt.plot(durations, mid_costs, marker='o', color='coral', label='Mid (15000/day)')
+plt.plot(durations, premium_costs, marker='o', color='seagreen', label='Premium (23000/day)')
+plt.title('Trip Cost by Duration')
+plt.xlabel('Days')
+plt.ylabel('Predicted Total (LKR)')
+plt.xticks(durations)
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.savefig('trip_cost_planner.png')
 plt.show()
