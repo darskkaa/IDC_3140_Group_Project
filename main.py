@@ -451,3 +451,140 @@ plt.grid(True, alpha=0.3)
 plt.savefig('trip_cost_planner.png')
 plt.show()
 #next we need to add maybe a featire without knowing bc lin reg works but is a easy ml model # try predicting without knowing the daily rate
+
+# compare train vs test to check for overfitting
+train_preds = model.predict(X_train)
+test_preds = model.predict(X_test)
+
+train_r2 = r2_score(y_train, train_preds)
+test_r2 = r2_score(y_test, test_preds)
+train_rmse = np.sqrt(mean_squared_error(y_train, train_preds))
+test_rmse = np.sqrt(mean_squared_error(y_test, test_preds))
+train_mae = abs(y_train - train_preds).mean()
+test_mae = abs(y_test - test_preds).mean()
+
+print('train R2:', round(train_r2, 4), ' test R2:', round(test_r2, 4))
+print('train RMSE:', round(train_rmse, 0), ' test RMSE:', round(test_rmse, 0))
+print('train MAE:', round(train_mae, 0), ' test MAE:', round(test_mae, 0))
+
+labels = ['R2', 'RMSE / 1000', 'MAE / 1000']
+train_vals = [train_r2, train_rmse / 1000, train_mae / 1000]
+test_vals = [test_r2, test_rmse / 1000, test_mae / 1000]
+
+x = [0, 1, 2]
+plt.figure(figsize=(9, 5))
+plt.bar([0-0.2, 1-0.2, 2-0.2], train_vals, 0.4, label='Training', color='steelblue')
+plt.bar([0+0.2, 1+0.2, 2+0.2], test_vals, 0.4, label='Test', color='coral')
+plt.xticks(x, labels)
+plt.title('traning vs Test Metrics')
+plt.legend()
+plt.savefig('model_evaluation.png')
+plt.show()
+
+# residuals  how far off were our predictions
+errors = y_test.values - test_preds
+plt.figure(figsize=(9, 5))
+plt.hist(errors, bins=60, color='green', edgecolor='white')
+plt.axvline(0, color='red', linestyle='--')
+plt.title('Prediction Errors')
+plt.xlabel('Error (LKR)')
+plt.ylabel('Count')
+plt.savefig('residuals.png')
+plt.show()
+
+# give each rental a price tier label
+tiers = []
+for val in data['Total_Amount_LKR']:
+    if val < 60000:
+        tiers.append('Budget')
+    elif val < 180000:
+        tiers.append('Mid')
+    else:
+        tiers.append('Premium')
+
+data['tier'] = tiers
+print(data['tier'].value_counts())
+
+X_tier_train, X_tier_test, y_tier_train, y_tier_test = train_test_split(
+    data[feature_cols], data['tier'], test_size=0.2, random_state=0
+)
+
+tree = DecisionTreeClassifier(max_depth=4)
+tree.fit(X_tier_train, y_tier_train)
+dt_acc = round(tree.score(X_tier_test, y_tier_test) * 100, 2)
+print('decision tree accuracy:', dt_acc, '%')
+
+plt.figure(figsize=(20, 8))
+plot_tree(tree, feature_names=feature_cols, class_names=tree.classes_, filled=True, fontsize=7)
+plt.title('Decision Tree - Budget / Mid / Premium splits')
+plt.savefig('decision_tree.png', bbox_inches='tight')
+plt.show()
+
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_tier_train, y_tier_train)
+knn_acc = round(knn.score(X_tier_test, y_tier_test) * 100, 2)
+print('knn accuracy:', knn_acc, '%')
+
+plt.figure(figsize=(7, 4))
+plt.bar(['Decision Tree', 'KNN (k=5)'], [dt_acc, knn_acc], color=['coral', 'green'])
+plt.title('Decision Tree vs KNN')
+plt.ylabel('Accuracy (%)')
+plt.ylim(90, 100)
+plt.savefig('model_comparison.png')
+plt.show()
+
+# try predicting without knowing the daily rate
+# the main model basically does rate x days which is too easy
+# this one has to figure it out from vehicle type, duration etc
+
+data_b = data.copy()
+data_b['vehicle_age'] = 2024 - data_b['Vehicle_Year']
+data_b['duration_sq'] = data_b['Rental_Duration_Days'] ** 2
+data_b['dur_x_insurance'] = data_b['Rental_Duration_Days'] * data_b['Insurance_Type_enc']
+
+norate_cols = [
+    'Rental_Duration_Days', 'Vehicle_Year', 'vehicle_age', 'Engine_CC',
+    'Mileage_KM', 'Customer_Age', 'Fuel_Type_enc', 'Transmission_enc',
+    'Body_Type_enc', 'Car_Brand_enc', 'Customer_Type_enc', 'Insurance_Type_enc',
+    'duration_sq', 'dur_x_insurance',
+]
+
+X_b = data_b[norate_cols]
+y_b = data_b['Total_Amount_LKR']
+
+X_b_train, X_b_test, y_b_train, y_b_test = train_test_split(X_b, y_b, test_size=0.2, random_state=0)
+
+gbr = GradientBoostingRegressor(n_estimators=100, max_depth=3, learning_rate=0.1, random_state=0)
+gbr.fit(X_b_train, y_b_train)
+y_b_pred = gbr.predict(X_b_test)
+
+r2_b = r2_score(y_b_test, y_b_pred)
+rmse_b = np.sqrt(mean_squared_error(y_b_test, y_b_pred))
+mae_b = abs(y_b_test - y_b_pred).mean()
+
+print('no-rate model results:')
+print('  R2:', round(r2_b, 4))
+print('  RMSE:', round(rmse_b, 0), 'LKR')
+print('  MAE:', round(mae_b, 0), 'LKR')
+
+# feature importance - which columns helped most
+imp_series = pd.Series(gbr.feature_importances_, index=norate_cols).sort_values()
+plt.figure(figsize=(10, 6))
+imp_series.plot(kind='barh', color='steelblue')
+plt.title('Feature importance - no daily rate model')
+plt.xlabel('importance')
+plt.tight_layout()
+plt.savefig('no_rate_importance.png')
+plt.show()
+
+# actual vs predicted for no-rate model
+plt.figure(figsize=(8, 6))
+plt.scatter(y_b_test, y_b_pred, alpha=0.2, color='purple', s=10)
+plt.plot([y_b_test.min(), y_b_test.max()], [y_b_test.min(), y_b_test.max()], 'r--')
+plt.xlabel('Actual (LKR)')
+plt.ylabel('Predicted (LKR)')
+plt.title('No-rate model - actual vs predicted  R2=' + str(round(r2_b, 4)))
+plt.tight_layout()
+plt.savefig('no_rate_predictions.png')
+plt.show()
+
