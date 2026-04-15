@@ -3,6 +3,7 @@
 
 import subprocess
 subprocess.run(['pip', 'install', 'kagglehub', '-q'], check=True)
+from sklearn.ensemble import GradientBoostingRegressor
 
 import kagglehub
 import os
